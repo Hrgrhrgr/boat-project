@@ -30,6 +30,9 @@ ynew = interpolate.splev(xnew, tck, der=0)
 # Print hodnoty pro hovnotu
 hovnota = 0.5
 print(interpolate.splev(hovnota, tck, der=0))
+# Integrál splinu
+print(interpolate.splint(3, 6, tck))
+
 
 plt.figure()
 plt.plot(x, y, 'x', xnew, ynew, xnew, np.sin(xnew), x, y, 'b')
@@ -42,8 +45,18 @@ plt.show()
 stations = [0, 60, 120, 230, 350, 400, 450]
 
 station00 = np.array([[0, 10],
+                      [0.1, 10],
                       [5, 14],
-                      [10, 18],
+                      [8, 18],
                       [12, 35],
                       ])
+splajna = interpolate.splrep(station00[:,0], station00[:,1])
+xnew = np.arange(0, 12, 0.1)
+ynew = interpolate.splev(xnew, splajna)
+
+plt.figure()
+plt.plot(station00[:,0], station00[:,1], 'x', xnew, ynew)
+plt.legend(['Linear', 'Cubic Spline'])
+plt.title('Cubic-spline interpolation')
+plt.show()
 
