@@ -1,0 +1,1584 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Feb  8 16:31:55 2022
+
+@author: Jirka Čech
+"""
+
+from scipy import interpolate
+import matplotlib.pyplot as plt
+import numpy as np
+import time
+import math
+import tkinter as tk
+import tkinter.font as tkFont
+from tkinter import ttk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+#import Pmw
+
+start = time.time()
+print('Hull_modeller_mk2...')
+
+class CreateToolTip(object):
+    '''
+    create a tooltip for a given widget
+    '''
+    def __init__(self, widget, text='widget info'):
+        self.widget = widget
+        self.text = text
+        self.widget.bind("<Enter>", self.enter)
+        self.widget.bind("<Leave>", self.close)
+
+    def enter(self, event=None):
+        x = y = 0
+        x, y, cx, cy = self.widget.bbox("insert")
+        x += self.widget.winfo_rootx() + 25
+        y += self.widget.winfo_rooty() + 0
+        # creates a toplevel window
+        self.tw = tk.Toplevel(self.widget)
+        # Leaves only the label and removes the app window
+        self.tw.wm_overrideredirect(True)
+        self.tw.wm_geometry("+%d+%d" % (x, y))
+        label = tk.Label(self.tw, text=self.text, justify='left',
+                       background='white', relief='solid', borderwidth=1,
+                       padx=4,pady=4
+                       #font=("times", "8", "normal")
+                       )
+        label.pack(ipadx=1)
+        #label.after(1000, self.close)
+    def close(self, event=None):
+        if self.tw:
+            self.tw.destroy()
+
+
+### tkinter GUI
+root = tk.Tk()
+#Pmw.initialise(window)
+root.title('Hull modeller mk. 2')
+root.state('zoomed')
+
+# Create A Main Frame
+main_frame = tk.Frame(root)
+main_frame.pack(fill='both', expand=1)
+
+# Create A Canvas
+my_canvas = tk.Canvas(main_frame)
+my_canvas.pack(side='left', fill='both', expand=1)
+
+# Add A Scrollbar To The Canvas
+my_scrollbar = ttk.Scrollbar(main_frame, orient='vertical', command=my_canvas.yview)
+my_scrollbar.pack(side='right', fill='y')
+
+# Configure The Canvas
+my_canvas.configure(yscrollcommand=my_scrollbar.set)
+my_canvas.bind('<Configure>', lambda e: my_canvas.configure(scrollregion = my_canvas.bbox("all")))
+
+# Create ANOTHER Frame INSIDE the Canvas
+window = tk.Frame(my_canvas)
+
+# Add that New frame To a Window In The Canvas
+my_canvas.create_window((0,0), window=window, anchor="nw")
+
+
+#Label	lbl	lbl_name
+#Button	btn	btn_submit
+#Entry	ent	ent_age
+#Text	txt	txt_notes
+#Frame	frm	frm_address
+
+
+# MAIN FRAME DEFINITON
+frame3 = tk.Frame(master=window,height=5, bg="gold",bd=1)
+frame3.grid(row=0,column=0,columnspan=3)
+
+frm_analytical_head = tk.Frame(master=window,bg="orange",bd=1)
+frm_analytical_head.grid(row=1,column=0,padx=5,pady=5,sticky="n")
+
+frm_analytical_head.columnconfigure(0, weight=1)
+frm_analytical_head.columnconfigure(2, weight=1)
+
+frm_midstation_parent = tk.Frame(master=window,bg="cyan",bd=1)    
+frm_midstation_parent.grid(row=2,column=0,padx=5,pady=5,columnspan=3,sticky="nw")
+
+frm_keel_parent = tk.Frame(master=window,bg="purple",bd=1)    
+frm_keel_parent.grid(row=1,column=1,padx=5,pady=5,sticky="n")
+
+frm_plane_parent = tk.Frame(master=window,bg="magenta",bd=1)    
+frm_plane_parent.grid(row=1,column=2,padx=5,pady=5,sticky="n")
+
+frm_canvasPlaneKeel_parent = tk.Frame(master=window,bg="magenta",bd=1)    
+frm_canvasPlaneKeel_parent.grid(row=1,column=3,padx=5,pady=5,sticky="n")
+
+
+### Analytical design
+# frames
+lbl_head_caption = tk.Label(text="Some data", master=frm_analytical_head)
+lbl_head_caption.grid(row=0,column=0,sticky="ew",columnspan=3)
+
+frm_head_l = tk.Frame(master=frm_analytical_head,height=25, bg="blue")
+frm_head_l.grid(row=1,column=0,sticky="nsew",padx=5,pady=5)
+
+frm_head_spacer = tk.Frame(master=frm_analytical_head,width=5, bg="black")
+frm_head_spacer.grid(row=1,column=1,sticky="ns",pady=5)
+
+frm_head_r = tk.Frame(master=frm_analytical_head,width=5,height=25, bg="green")
+frm_head_r.grid(row=1,column=2,sticky="nsew",padx=5,pady=5)
+# HELP
+    #1 waterline length
+    #2 Slenderness ratio ~ length/beam ratio
+    #3 waterline beam
+    #4 beam/draft ratio
+    #5 draft
+    
+# Data    
+lwl = 4.5
+lbr = 13
+bwl = lwl/lbr  
+btr = 1.5
+tc = bwl/btr
+cm = 0.785
+cp = 0.62
+hullSpeed = 2.44*math.sqrt(lwl)
+hullSpeed_kmph = hullSpeed * 1.852
+cw = 0.71
+mldc = 2*bwl*lwl*tc*cp*cm*1025
+ldr = lwl*np.cbrt(1025/mldc)
+mllc = 0.7*mldc
+mmoc = 0.8*mldc
+
+#1 waterline length
+row = 0
+lbl_lwl = tk.Label(text="Waterline length", master=frm_head_l)
+lbl_lwl.grid(row=row,column=0,sticky="ew")
+
+lbl_lwl_var = tk.Label(text="Lwl ", master=frm_head_l)
+lbl_lwl_var.grid(row=row,column=1,sticky="ew")
+
+ent_lwl = tk.Entry(master=frm_head_l, width=5,justify="center")
+ent_lwl.grid(row=row,column=2,sticky="ew")
+ent_lwl.insert(0, float(lwl))
+
+lbl_lwl_unit = tk.Label(text="m", master=frm_head_l)
+lbl_lwl_unit.grid(row=row,column=3,sticky="ew")
+
+#3 waterline beam
+row = row + 1
+lbl_bwl = tk.Label(text="Waterline beam", master=frm_head_l)
+lbl_bwl.grid(row=row,column=0,sticky="ew")
+
+lbl_bwl_var = tk.Label(text="Bwl", master=frm_head_l)
+lbl_bwl_var.grid(row=row,column=1,sticky="ew")
+
+lbl_bwl_val = tk.Label(text=round(bwl,3),master=frm_head_l, width=5)
+lbl_bwl_val.grid(row=row,column=2,sticky="ew")
+info_bwl_val = CreateToolTip(lbl_bwl_val, "Bwl = Lwl/Lbr")
+#lbl_bwl.insert(0, round(bwl,3))
+
+lbl_bwl_unit = tk.Label(text="m", master=frm_head_l)
+lbl_bwl_unit.grid(row=row,column=3,sticky="ew")
+
+#5 draft
+row = row + 1
+lbl_tc = tk.Label(text="Draft", master=frm_head_l)
+lbl_tc.grid(row=row,column=0,sticky="ew")
+
+lbl_tc_var = tk.Label(text="Tc", master=frm_head_l)
+lbl_tc_var.grid(row=row,column=1,sticky="ew")
+
+lbl_tc_val = tk.Label(text=round(tc,3),master=frm_head_l, width=5)
+lbl_tc_val.grid(row=row,column=2,sticky="ew")
+info_tc_val = CreateToolTip(lbl_tc_val, "Tc = Bwl/Btr")
+
+lbl_tc_unit = tk.Label(text="m", master=frm_head_l)
+lbl_tc_unit.grid(row=row,column=3,sticky="ew")
+
+#8 hull speed (metric, knots)
+row = row + 1
+lbl_hullSpeed = tk.Label(text="Hull speed", master=frm_head_l)
+lbl_hullSpeed.grid(row=row,column=0,sticky="ew")
+
+lbl_hullSpeed_var = tk.Label(text="vhull ", master=frm_head_l)
+lbl_hullSpeed_var.grid(row=row,column=1,sticky="ew")
+
+lbl_hullSpeed_val = tk.Label(text=round(hullSpeed,2),master=frm_head_l, width=5)
+lbl_hullSpeed_val.grid(row=row,column=2,sticky="ew")
+
+lbl_hullSpeed_unit = tk.Label(text="knots", master=frm_head_l)
+lbl_hullSpeed_unit.grid(row=row,column=3,sticky="ew")
+info_hullSpeed = CreateToolTip(lbl_hullSpeed_val, "vhull = 2.44*sqrt(Lwl)")
+
+row = row + 1
+lbl_hullSpeed_var = tk.Label(text="'->", master=frm_head_l)
+lbl_hullSpeed_var.grid(row=row,column=1,sticky="ew")
+
+lbl_hullSpeed_kmph_val = tk.Label(text=round(hullSpeed_kmph,1),master=frm_head_l, width=5)
+lbl_hullSpeed_kmph_val.grid(row=row,column=2,sticky="ew")
+
+lbl_hullSpeed_kmph_unit = tk.Label(text="km/h", master=frm_head_l)
+lbl_hullSpeed_kmph_unit.grid(row=row,column=3,sticky="ew")
+info_hullSpeed_kmph = CreateToolTip(lbl_hullSpeed_kmph_val, "vhull*1.852")
+
+#10 fully loaded displacement
+row = row + 1
+lbl_mldc = tk.Label(text="Fully loaded displacement", master=frm_head_l)
+lbl_mldc.grid(row=row,column=0,sticky="ew")
+
+lbl_mldc_var = tk.Label(text="mldc", master=frm_head_l)
+lbl_mldc_var.grid(row=row,column=1,sticky="ew")
+
+lbl_mldc_val = tk.Label(text=round(mldc),master=frm_head_l, width=5)
+lbl_mldc_val.grid(row=row,column=2,sticky="ew")
+info_mldc_val = CreateToolTip(lbl_mldc_val, "mldc = 2*bwl*lwl*tc*cp*cm*1025")
+
+lbl_mldc_unit = tk.Label(text="kg", master=frm_head_l)
+lbl_mldc_unit.grid(row=row,column=3,sticky="ew")
+
+
+
+#12 empty boat displacement
+row = row + 1
+lbl_mllc = tk.Label(text="Empty boat displacement", master=frm_head_l)
+lbl_mllc.grid(row=row,column=0,sticky="ew")
+
+lbl_mllc_var = tk.Label(text="mllc", master=frm_head_l)
+lbl_mllc_var.grid(row=row,column=1,sticky="ew")
+
+lbl_mllc_val = tk.Label(text=round(mllc),master=frm_head_l, width=5)
+lbl_mllc_val.grid(row=row,column=2,sticky="ew")
+info_mllc_val = CreateToolTip(lbl_mllc_val, "mllc = 0.7*mldc")
+
+lbl_mllc_unit = tk.Label(text="kg", master=frm_head_l)
+lbl_mllc_unit.grid(row=row,column=3,sticky="ew")
+
+#13 light loaded displacement
+
+# COLUMN CONJUCTION
+#2 Slenderness ratio ~ length/beam ratio (9 - 12 cruise, 12 - 14 performance)
+row = row + 1
+lbl_lbr = tk.Label(text="Length/beam ratio", master=frm_head_l)
+lbl_lbr.grid(row=row,column=0,sticky="ew")
+
+lbl_lbr_var = tk.Label(text="Lbr ", master=frm_head_l)
+lbl_lbr_var.grid(row=row,column=1,sticky="ew")
+
+ent_lbr = tk.Entry(master=frm_head_l, width=5)
+ent_lbr.grid(row=row,column=2,sticky="ew")
+ent_lbr.insert(0, float(lbr))
+
+btn_lbr_info = tk.Button(text="info", master=frm_head_l,font=tkFont.Font(size=6))
+btn_lbr_info.grid(row=row,column=3,padx=2)
+
+info_lbr = CreateToolTip(btn_lbr_info, "Lbr = Lwl/Bwl, example 9 - 12 cruise, 12 - 14 performance")
+
+#4 beam/draft ratio (reasonable range 1,5 - 2,8)
+row = row + 1
+lbl_btr = tk.Label(text="Beam/draft ratio", master=frm_head_l)
+lbl_btr.grid(row=row,column=0,sticky="ew")
+
+lbl_btr_var = tk.Label(text="Btr ", master=frm_head_l)
+lbl_btr_var.grid(row=row,column=1,sticky="ew")
+
+ent_btr = tk.Entry(master=frm_head_l, width=5)
+ent_btr.grid(row=row,column=2,sticky="ew")
+ent_btr.insert(0, float(btr))
+
+btn_btr_info = tk.Button(text="info", master=frm_head_l,font=tkFont.Font(size=6))
+btn_btr_info.grid(row=row,column=3,padx=2)
+info_btr = CreateToolTip(btn_btr_info, "Btr = Bwl/Tc, reasonable range between 1,5 and 2,8")
+
+#6 midship coefficient (for ellipse cm=0.785) cm = Am/(tc*bwl)
+row = row + 1
+lbl_cm = tk.Label(text="Midship coefficient", master=frm_head_l)
+lbl_cm.grid(row=row,column=0,sticky="ew")
+
+lbl_cm_var = tk.Label(text="Cm", master=frm_head_l)
+lbl_cm_var.grid(row=row,column=1,sticky="ew")
+
+ent_cm = tk.Entry(master=frm_head_l, width=5)
+ent_cm.grid(row=row,column=2,sticky="ew")
+ent_cm.insert(0, float(cm))
+
+btn_cm_info = tk.Button(text="info", master=frm_head_l,font=tkFont.Font(size=6))
+btn_cm_info.grid(row=row,column=3,padx=2)
+info_cm = CreateToolTip(btn_cm_info, "Cm = Am/Tc*Bwl, example for ellipse 0.785")
+
+#7 prismatic coefficient (< 0.57 sub-hullspeeds, 0.61 - 0.65 over-hullspeeds)
+row = row + 1
+lbl_cp = tk.Label(text="Prismatic coefficient", master=frm_head_l)
+lbl_cp.grid(row=row,column=0,sticky="ew")
+
+lbl_cp_var = tk.Label(text="Cp", master=frm_head_l)
+lbl_cp_var.grid(row=row,column=1,sticky="ew")
+
+ent_cp = tk.Entry(master=frm_head_l, width=5)
+ent_cp.grid(row=row,column=2,sticky="ew")
+ent_cp.insert(0, float(cp))
+
+btn_cp_info = tk.Button(text="info", master=frm_head_l,font=tkFont.Font(size=6))
+btn_cp_info.grid(row=row,column=3,padx=2)
+info_cp = CreateToolTip(btn_cp_info, "Under 0.57 for sub-hullspeeds, over 0.61 - 0.65 over-hullspeeds")
+
+#9 water plane coefficient (typical value 0.69 - 0.72) cw = Aw/(bwl*lwl)
+row = row + 1
+lbl_cw = tk.Label(text="Water plane coefficient", master=frm_head_l)
+lbl_cw.grid(row=row,column=0,sticky="ew")
+
+lbl_cw_var = tk.Label(text="Cw", master=frm_head_l)
+lbl_cw_var.grid(row=row,column=1,sticky="ew")
+
+ent_cw = tk.Entry(master=frm_head_l, width=5)
+ent_cw.grid(row=row,column=2,sticky="ew")
+ent_cw.insert(0, float(cw))
+
+btn_cw_info = tk.Button(text="info", master=frm_head_l,font=tkFont.Font(size=6))
+btn_cw_info.grid(row=row,column=3,padx=2)
+info_cw = CreateToolTip(btn_cw_info, "Cw = Aw/Bwl*Lwl), typical value 0.69 - 0.72")
+
+#11 length/displacement ratio (5 is heavy, 6 - 7 for performance)
+row = row + 1
+lbl_ldr = tk.Label(text="Length/displacement ratio", master=frm_head_l)
+lbl_ldr.grid(row=row,column=0,sticky="ew")
+
+lbl_ldr_var = tk.Label(text="Ldr", master=frm_head_l)
+lbl_ldr_var.grid(row=row,column=1,sticky="ew")
+
+lbl_ldr_val = tk.Label(master=frm_head_l,text=round(ldr,2), width=5)
+lbl_ldr_val.grid(row=row,column=2,sticky="ew")
+
+btn_ldr_info = tk.Button(text="info", master=frm_head_l,font=tkFont.Font(size=6))
+btn_ldr_info.grid(row=row,column=3,padx=2)
+info_ldr = CreateToolTip(btn_ldr_info, "lwl*np.cbrt(1025/mldc), 5 for heavy ship, 6 - 7 for performance")
+
+# Button
+button4 = tk.Button(
+    text="Recalculate",master=frm_analytical_head)
+button4.grid(row=2,column=0,columnspan=3,sticky="ew",padx=5,pady=5)
+
+
+### Declaration of global variables
+
+### Declaration of functions
+
+def getMidstationVectors(x1,x2,x3,xwl,x4,x5,x6,xbot,
+                         y1,y2,y3,ywl,y4,y5,y6,ybot):
+    vectorX = []
+    vectorY = []
+    if not math.isnan(x1):
+        vectorX.append(x1)
+        vectorY.append(y1)
+    if not math.isnan(x2):
+        vectorX.append(x2)
+        vectorY.append(y2)
+    if not math.isnan(x3):
+        vectorX.append(x3)
+        vectorY.append(y3)    
+    if not math.isnan(xwl):
+        vectorX.append(xwl)
+        vectorY.append(ywl)
+    if not math.isnan(x4):
+        vectorX.append(x4)
+        vectorY.append(y4)
+    if not math.isnan(x5):
+        vectorX.append(x5)
+        vectorY.append(y5)
+    if not math.isnan(x6):
+        vectorX.append(x6)
+        vectorY.append(y6)    
+    vectorX.append(xbot)
+    vectorY.append(ybot)
+    
+    return(vectorX,vectorY)
+
+def mirrorMidstationVectors(vectorX,vectorY):
+    modVectorX = vectorX
+    modVectorY = vectorY
+    length = len(vectorX)
+    for n in range(length-1):
+        modVectorX.append(-vectorX[length-2-n])
+        modVectorY.append(vectorY[length-2-n])
+    modVectorX.reverse()
+    return(modVectorX,modVectorY)
+
+def solveSplineForY(spline,y,fromX,toX):
+    xnew = np.linspace(fromX, toX, 100)
+    ynew = interpolate.splev(xnew, spline)
+    yreduced = np.array(ynew) - y
+    freduced = interpolate.UnivariateSpline(xnew, yreduced, s=0)
+    roots = freduced.roots()
+    return(roots)
+
+def plotMidstationOnCanvas(xVector,yVector,spline,
+                           xVectorMorph,yVectorMorph,splineMorph,
+                           xboundFrom,xboundTo,
+                           draftLineHeight,yToFind,
+                           maxWidthX, maxWidthY,maxWidthXspline):
+    #draftLineHeight = 0.1
+    xnew = np.linspace(xboundFrom, xboundTo, 100)
+    xWaterline = [xboundFrom,xboundTo]
+    yWaterline = [draftLineHeight, draftLineHeight ]
+    ynew = interpolate.splev(xnew, spline)
+    ynewMorph = interpolate.splev(xnew, splineMorph)
+    ynewMaxWidth = interpolate.splev(xnew, maxWidthXspline)
+    fig = plt.figure()
+    plt.plot(xDefVector[:], yDefVector[:], 'x', 
+             xnew, ynew,
+             xnew, ynewMorph,
+             xWaterline, yWaterline, '--',
+             xnew, ynewMaxWidth, ':',
+             #solveSplineForY(spline,yToFind,-xboundTo,xboundTo), [yToFind,yToFind], "v",
+             xVectorMorph, yVectorMorph, 'x',
+             maxWidthX, maxWidthY, 'x'
+             )
+    plt.legend(['Def points', 'Spline','Spline morphed','Waterline','Max width'])
+    plt.title('Mid station shape')
+    plt.show()    
+    canvas = FigureCanvasTkAgg(fig, master=frm_midstation_plot)
+    canvas.get_tk_widget().pack()
+    canvas.draw()
+    return()
+
+def plotKeelLineOnCanvas(xVector,yVector,spline,
+                           xboundFrom,xboundTo,yToFind):
+    xnew = np.linspace(xboundFrom+0.001, xboundTo-0.001, 100)
+    ynew = -interpolate.splev(xnew, spline)
+    xnew = np.insert(xnew,0,0)
+    xnew = np.append(xnew,xboundTo)
+    ynew = np.insert(ynew,0,0)
+    ynew = np.append(ynew,0)
+    yVector = -np.array(yVector)
+    fig = plt.figure()
+    plt.plot(xVector[:], yVector[:], 'x', 
+             xnew, ynew,
+             )
+    plt.legend(['Def points', 'Spline','yToFind','Waterline'])
+    plt.title('Rocker line')
+    plt.show()    
+    canvas = FigureCanvasTkAgg(fig, master=frm_canvasPlaneKeel_parent)
+    canvas.get_tk_widget().pack()
+    canvas.draw()
+    return()
+
+def plotPlaneShapeOnCanvas(shape1VectorX, shape1VectorY,
+                       shape2VectorX, shape2VectorY,
+                       shape3VectorX, shape3VectorY,
+                       shape4VectorX, shape4VectorY, 
+                       spline1, spline2, spline3, spline4):
+    xnew = np.linspace(shape1VectorX[0], shape1VectorX[-1],100)
+    ynew1 = interpolate.splev(xnew, spline1)
+    ynew2 = interpolate.splev(xnew, spline2)
+    ynew3 = interpolate.splev(xnew, spline3)
+    ynew4 = interpolate.splev(xnew, spline4)
+
+    fig = plt.figure()
+    plt.plot(shape1VectorX, shape1VectorY, 'x', 
+             xnew, ynew1,
+             shape2VectorX, shape2VectorY, 'x', 
+             xnew, ynew2,
+             shape3VectorX, shape3VectorY, 'x', 
+             xnew, ynew3,
+             shape4VectorX, shape4VectorY, 'x', 
+             xnew, ynew4,
+             )
+    #plt.legend(['Def points', 'Spline','yToFind','Waterline'])
+    plt.title('Plane shape')
+    plt.show()    
+    canvas = FigureCanvasTkAgg(fig, master=frm_canvasPlaneKeel_parent)
+    canvas.get_tk_widget().pack()
+    canvas.draw()
+    return()
+
+def plotKeelAndPlane(shape1VectorX, shape1VectorY,
+                       shape2VectorX, shape2VectorY,
+                       shape3VectorX, shape3VectorY,
+                       shape4VectorX, shape4VectorY,
+                       keelVectorX, keelVectorY,
+                       spline1, spline2, spline3, spline4, spline5,
+                       maxWidthPoints):
+    xnew = np.linspace(shape1VectorX[0], shape1VectorX[-1],100)
+    xnew2 = xnew
+    xnew2 = np.insert(xnew2,0,0)
+    xnew2 = np.append(xnew2,shape1VectorX[-1])
+    ynew1 = interpolate.splev(xnew, spline1)
+    ynew2 = interpolate.splev(xnew, spline2)
+    ynew3 = interpolate.splev(xnew, spline3)
+    ynew4 = interpolate.splev(xnew, spline4)
+    ynew5 = -interpolate.splev(xnew, spline5)
+    
+    ynew5 = np.insert(ynew5,0,0)
+    ynew5 = np.append(ynew5,0)
+    keelVectorY = -np.array(keelVectorY)
+
+    fig = plt.figure(figsize=[10,4.8])
+    plt.plot(shape1VectorX, shape1VectorY, 'x', 
+             xnew, ynew1,
+             shape2VectorX, shape2VectorY, 'x', 
+             xnew, ynew2,
+             shape3VectorX, shape3VectorY, 'x', 
+             xnew, ynew3,
+             shape4VectorX, shape4VectorY, 'x', 
+             xnew, ynew4,
+             keelVectorX, keelVectorY, 'x', 
+             xnew2, ynew5,
+             [shape1VectorX[0]-0.2,shape1VectorX[-1]+0.2],[0,0],'--',
+             maxWidthPoints[0,0:],-maxWidthPoints[1,0:],':',
+             [maxWidthPoints[0,0],maxWidthPoints[0,0]],[bwl/2,-tc],':',
+             [maxWidthPoints[0,1],maxWidthPoints[0,1]],[bwl/2,-tc],':'
+             )
+    #plt.legend(['Def points', 'Spline','yToFind','Waterline'])
+    plt.title('Plane and keel shape')
+    plt.show()    
+    canvas1 = FigureCanvasTkAgg(fig, master=frm_canvasPlaneKeel_parent)
+    canvas1.get_tk_widget().pack(fill='both',expand=True)
+    canvas1.draw()
+    return()
+
+def getKeelVectors(x1,y1,
+                   x2,y2,
+                   x3,y3,
+                   x4,y4,
+                   x5,y5,
+                   x6,y6,
+                   x7,y7,
+                   lwl):
+    vectorX = [lwl]
+    vectorY = [0]
+    if not math.isnan(x1):
+        vectorX.append(x1*lwl)
+        vectorY.append(y1)
+    if not math.isnan(x2):
+        vectorX.append(x2*lwl)
+        vectorY.append(y2)
+    if not math.isnan(x3):
+        vectorX.append(x3*lwl)
+        vectorY.append(y3)    
+    if not math.isnan(x4):
+        vectorX.append(x4*lwl)
+        vectorY.append(y4)
+    if not math.isnan(x5):
+        vectorX.append(x5*lwl)
+        vectorY.append(y5)
+    if not math.isnan(x6):
+        vectorX.append(x6*lwl)
+        vectorY.append(y6) 
+    if not math.isnan(x7):
+        vectorX.append(x7*lwl)
+        vectorY.append(y7)
+    vectorX.append(0)
+    vectorY.append(0)
+    vectorX.reverse()
+    vectorY.reverse()
+    return(vectorX,vectorY)
+    return()
+
+def getPlaneVectors(vectorX,vectorY,lwl):
+    vectorXout = np.array([])
+    vectorYout = np.array([])
+    length = len(vectorX)
+    for i in range(length):
+        if not math.isnan(vectorX[i]):
+            vectorXout = np.append(vectorXout,vectorX[i]*lwl)
+            vectorYout = np.append(vectorYout,vectorY[i])
+    vectorXout = np.flip(vectorXout)
+    vectorYout = np.flip(vectorYout)
+    return(vectorXout,vectorYout)
+
+def maxWidthDefPoints(spline,deltaX):
+    xStart = solveSplineForY(spline, tc - deltaX, 0, lwl)[0]
+    yStart = 0
+    xEnd = bumpX*lwl
+    yEnd = tc
+    length = round(xEnd - xStart,3)
+    return(np.array([[xStart,xEnd],[yStart,yEnd]]),length)
+
+def maxWidthPositionForY(y,array):
+    x1 = array[0,0]
+    x2 = array[0,1]
+    y1 = array[1,0]
+    y2 = array[1,1]
+    dx = x2 - x1
+    dy = y2 - y1
+    k = dy/dx
+    c = (dx/dy)*(y1/x1)
+    c = - dy/dx * x1
+    print('k ', k)
+    print('c ', c)
+    x = y * dx/dy - ((dx/dy)**2) * y1/x1
+    x = y/k - c/k
+    return(x)
+
+def maxWidthPositionForX(x,array):
+    x1 = array[0,0]
+    x2 = array[0,1]
+    y1 = array[1,0]
+    y2 = array[1,1]
+    dx = x2 - x1
+    dy = y2 - y1
+    y = x * dy/dx + dx/dy * y1/x1
+    return(y)
+
+def getPlaneSplinePartOne(y,keelSpline,midstationSpline,maxWidthSpline):
+    x1 = solveSplineForY(keelSpline, y, 0, lwl)[0]
+    x2 = maxWidthPositionForY(y, maxWidthPoints)
+    x3 = bumpX*lwl
+    x4 = solveSplineForY(keelSpline, y, 0, lwl)[1]
+    
+    y1 = 0.005
+    y2 = solveSplineForY(maxWidthSpline, tc-y, -bwl/2, bwl/2)[1]
+    y3 = solveSplineForY(midstationSpline, tc-y, -bwl/2, bwl/2)[1]
+    y4 = 0.005
+    splineOrder = 2
+    splineSF = 0
+    print([x1,x2,x3,x4])
+    print([y1,y2,y3,y4])
+    x3 = x2 + 0.001
+    y3 = y2
+    spline = interpolate.splrep([x1,x2,x3,x4], [y1,y2,y3,y4],
+                                k=splineOrder,s=splineSF)
+    
+    xnew = np.linspace(x1,x4,100)
+    ynew = interpolate.splev(xnew,spline)
+    fig = plt.figure()
+    plt.plot([x1,x2,x3,x4], [y1,y2,y3,y4], 'x', 
+             xnew, ynew,
+             )
+    plt.show() 
+    return(spline)
+
+
+### Hull modelling
+    # INFO - units m, kg
+
+# Step 1 - fill missing values
+    # parametrize station step, level step
+stepStation = 1
+stepLevel = 1
+
+
+# Step 2 - get max cross setion area shape A(front)
+    # Defining values
+    
+    # Dedicated function
+    # second derivative (curve, max/min/avg value)
+    # import/create and save (import/save functions)
+    # have both x, z step version (spline)
+
+xColWidth = 7
+yColWidth = 7
+
+x1 = 0.2
+x2 = np.nan
+x3 = np.nan
+xwl = bwl/2
+x4 = np.nan
+x5 = np.nan
+x6 = 0.11
+xbot = 0
+xDefVector = None
+
+y1 = 0.4
+y2 = np.nan
+y3 = np.nan
+ywl = tc
+y4 = np.nan
+y5 = np.nan
+y6 = 0.06
+ybot = 0
+yDefVector = None
+
+splineOrder = 3
+splineSF = 0.0
+
+yToFind=0.3
+
+    # MIDSTATION frame
+   
+frm_midstation = tk.Frame(master=frm_midstation_parent,bg="yellow",bd=1)
+frm_midstation.grid(row=0,column=0,padx=10,pady=5)
+
+frm_midstation_plot = tk.Frame(master=frm_midstation_parent,bg="brown",bd=1) 
+frm_midstation_plot.grid(row=0,column=1,padx=0,pady=0)
+
+row=0
+lbl_midstation_label = tk.Label(text="Midstation definiton", master=frm_midstation)
+lbl_midstation_label.grid(row=row,column=0,sticky="ew",columnspan=3) 
+
+row=row+1
+lbl_xAxis = tk.Label(text="x", master=frm_midstation)
+lbl_xAxis.grid(row=row,column=1,sticky="ew") 
+
+lbl_yAxis = tk.Label(text="y", master=frm_midstation)
+lbl_yAxis.grid(row=row,column=2,sticky="ew") 
+
+row=row+1
+ent_x1 = tk.Entry(master=frm_midstation, width=xColWidth)
+ent_x1.grid(row=row,column=1,sticky="ew")
+ent_x1.insert(0, float(x1))
+
+ent_y1 = tk.Entry(master=frm_midstation, width=yColWidth)
+ent_y1.grid(row=row,column=2,sticky="ew")
+ent_y1.insert(0, float(y1))
+
+row=row+1
+ent_x2 = tk.Entry(master=frm_midstation, width=xColWidth)
+ent_x2.grid(row=row,column=1,sticky="ew")
+ent_x2.insert(0, float(x2))
+
+ent_y2 = tk.Entry(master=frm_midstation, width=yColWidth)
+ent_y2.grid(row=row,column=2,sticky="ew")
+ent_y2.insert(0, float(y2))
+
+row=row+1
+ent_x3 = tk.Entry(master=frm_midstation, width=xColWidth)
+ent_x3.grid(row=row,column=1,sticky="ew")
+ent_x3.insert(0, float(x3))
+
+ent_y3 = tk.Entry(master=frm_midstation, width=yColWidth)
+ent_y3.grid(row=row,column=2,sticky="ew")
+ent_y3.insert(0, float(y3))
+
+row=row+1
+lbl_xAxis = tk.Label(text="Waterline ", master=frm_midstation)
+lbl_xAxis.grid(row=row,column=0,sticky="ew") 
+
+ent_xwl = tk.Entry(master=frm_midstation, width=xColWidth)
+ent_xwl.grid(row=row,column=1,sticky="ew")
+ent_xwl.insert(0, round(xwl,3))
+
+ent_ywl = tk.Entry(master=frm_midstation, width=yColWidth)
+ent_ywl.grid(row=row,column=2,sticky="ew")
+ent_ywl.insert(0, round(ywl,3))
+
+row=row+1
+ent_x4 = tk.Entry(master=frm_midstation, width=xColWidth)
+ent_x4.grid(row=row,column=1,sticky="ew")
+ent_x4.insert(0, float(x4))
+
+ent_y4 = tk.Entry(master=frm_midstation, width=yColWidth)
+ent_y4.grid(row=row,column=2,sticky="ew")
+ent_y4.insert(0, float(y4))
+
+row=row+1
+ent_x5 = tk.Entry(master=frm_midstation, width=xColWidth)
+ent_x5.grid(row=row,column=1,sticky="ew")
+ent_x5.insert(0, float(x5))
+
+ent_y5 = tk.Entry(master=frm_midstation, width=yColWidth)
+ent_y5.grid(row=row,column=2,sticky="ew")
+ent_y5.insert(0, float(y5))
+
+row=row+1
+ent_x6 = tk.Entry(master=frm_midstation, width=xColWidth)
+ent_x6.grid(row=row,column=1,sticky="ew")
+ent_x6.insert(0, float(x6))
+
+ent_y6 = tk.Entry(master=frm_midstation, width=yColWidth)
+ent_y6.grid(row=row,column=2,sticky="ew")
+ent_y6.insert(0, float(y6))
+
+row=row+1
+lbl_xAxis = tk.Label(text="Bottom ", master=frm_midstation)
+lbl_xAxis.grid(row=row,column=0,sticky="ew") 
+
+lbl_xbot = tk.Label(master=frm_midstation,text=xbot)
+lbl_xbot.grid(row=row,column=1,sticky="ew")
+
+lbl_ybot = tk.Label(master=frm_midstation,text=ybot)
+lbl_ybot.grid(row=row,column=2,sticky="ew")
+
+row=row+1
+lbl_splineOrder = tk.Label(text="Spline order ", master=frm_midstation)
+lbl_splineOrder.grid(row=row,column=0,sticky="ew") 
+
+ent_splineOrder = tk.Entry(master=frm_midstation, width=xColWidth)
+ent_splineOrder.grid(row=row,column=1,columnspan=2)
+ent_splineOrder.insert(0, float(splineOrder))
+
+row=row+1
+lbl_splineSF = tk.Label(text="Spline smooth factor ", master=frm_midstation)
+lbl_splineSF.grid(row=row,column=0,sticky="ew") 
+
+ent_splineSF = tk.Entry(master=frm_midstation, width=xColWidth)
+ent_splineSF.grid(row=row,column=1,columnspan=2)
+ent_splineSF.insert(0, float(splineSF))
+
+row=row+1
+btn_redraw = tk.Button(text="Redraw", master=frm_midstation)
+btn_redraw.grid(row=row,column=0,sticky="ew",columnspan=3) 
+
+# Function for x,y vectors
+xDefVector, yDefVector = getMidstationVectors(x1,x2,x3,xwl,x4,x5,x6,xbot,
+                                              y1,y2,y3,ywl,y4,y5,y6,ybot)
+xDefVector, yDefVector = mirrorMidstationVectors(xDefVector, yDefVector)
+#print(xDefVector)
+#print(yDefVector)
+
+# Create x,y splines
+midsectionXspline = interpolate.splrep(xDefVector[:], yDefVector[:], 
+                                       k=splineOrder,s=splineSF)
+
+# Shape into second midstation
+xMorphCorr = 0.94
+yMorphCorr = 1.08
+deltaX = 0.01 * xMorphCorr
+deltaY = 0.01 * yMorphCorr
+
+upperXoffset = deltaX*1*bwl/tc
+XaboveWL = []
+YaboveWL = []
+if not math.isnan(x1):
+    XaboveWL.append(x1+upperXoffset)
+    YaboveWL.append(y1)
+    
+if not math.isnan(x2):
+    XaboveWL.append(x2+upperXoffset)
+    YaboveWL.append(y2)
+
+if not math.isnan(x3):
+    XaboveWL.append(x3+upperXoffset)
+    YaboveWL.append(y3)    
+
+XunderWL = []
+YunderWL = []
+
+if not math.isnan(x4):
+    XunderWL.append(x4*(1+2*deltaX/bwl))
+    YunderWL.append(y4*(1-deltaY/tc)+deltaY)
+    
+if not math.isnan(x5):
+    XunderWL.append(x5*(1+2*deltaX/bwl))
+    YunderWL.append(y5*(1-deltaY/tc)+deltaY)
+
+if not math.isnan(x6):
+    XunderWL.append(x6*(1+2*deltaX/bwl))
+    YunderWL.append(y6*(1-deltaY/tc)+deltaY) 
+
+XunderWL = np.array(XunderWL)
+xDefVectorMorph = -np.array(XaboveWL)
+xDefVectorMorph = np.append(xDefVectorMorph,-xwl-deltaX*xMorphCorr)
+xDefVectorMorph = np.append(xDefVectorMorph,-XunderWL)
+pom = - np.flip(xDefVectorMorph)
+xDefVectorMorph = np.append(xDefVectorMorph,-0.005)
+xDefVectorMorph = np.append(xDefVectorMorph,0.005)
+xDefVectorMorph = np.append(xDefVectorMorph,pom)
+
+YunderWL = np.array(YunderWL)
+yDefVectorMorph = np.array(YaboveWL)
+yDefVectorMorph = np.append(yDefVectorMorph,tc)
+yDefVectorMorph = np.append(yDefVectorMorph,YunderWL)
+pom = np.flip(yDefVectorMorph)
+yDefVectorMorph = np.append(yDefVectorMorph,0+deltaY*yMorphCorr)
+yDefVectorMorph = np.append(yDefVectorMorph,0+deltaY*yMorphCorr)
+yDefVectorMorph = np.append(yDefVectorMorph,pom)
+
+midsectionMorphXspline = interpolate.splrep(xDefVectorMorph, yDefVectorMorph, 
+                                       k=splineOrder,s=splineSF)
+
+# Max width curve
+maxWidthVectorX = -np.array(XaboveWL)
+maxWidthVectorX = np.append(maxWidthVectorX,-xwl-deltaX*xMorphCorr)
+a1=bwl/2
+a2=a1+deltaX
+b1=tc
+b2=tc-deltaX
+pomq = math.sqrt((b2**2-b1**2)/
+                 (b2**2/a2**2 - b1**2/a1**2))
+maxWidthVectorX = np.append(maxWidthVectorX,
+                            -pomq*(1+deltaX/bwl))
+pom = -np.flip(maxWidthVectorX)
+maxWidthVectorX = np.append(maxWidthVectorX,0)
+maxWidthVectorX = np.append(maxWidthVectorX,pom)
+
+maxWidthVectorY = np.array(YaboveWL)
+maxWidthVectorY = np.append(maxWidthVectorY,tc)
+maxWidthVectorY = np.append(maxWidthVectorY,
+                            interpolate.splev(pomq,midsectionXspline)*
+                            (1-deltaX/(2*tc)+0.5*deltaX)
+                            )
+pom = np.flip(maxWidthVectorY)
+maxWidthVectorY = np.append(maxWidthVectorY,0)
+maxWidthVectorY = np.append(maxWidthVectorY,pom)
+
+maxWidthXspline = interpolate.splrep(maxWidthVectorX, maxWidthVectorY, 
+                                       k=splineOrder,s=splineSF)
+
+
+# Plot on canvas function
+plotMidstationOnCanvas(xDefVector, yDefVector, 
+                       midsectionXspline, 
+                       xDefVectorMorph, yDefVectorMorph,
+                       midsectionMorphXspline,
+                       1.0*xDefVector[0], 
+                       1.0*xDefVector[-1],
+                       tc,
+                       yToFind,
+                       maxWidthVectorX, maxWidthVectorY,
+                       maxWidthXspline)
+
+print('Original ',round(tc*0.5*bwl - interpolate.splint(0, 0.5*bwl, midsectionXspline),6), ' m2')
+print('Morph    ',round(tc*(0.5*bwl+deltaX*xMorphCorr) -interpolate.splint(0, 0.5*bwl+deltaX*xMorphCorr, midsectionMorphXspline),6),'m2')
+print(' > error ', round(100*(1-
+      (tc*0.5*bwl - interpolate.splint(0, 0.5*bwl, midsectionXspline))
+      / 
+      (tc*(0.5*bwl+deltaX*xMorphCorr) -interpolate.splint(0, 0.5*bwl+deltaX*xMorphCorr, midsectionMorphXspline))
+      ),2), ' %')
+print('Cm ', round((tc*0.5*bwl - interpolate.splint(0, 0.5*bwl, midsectionXspline))/(0.5*tc*bwl),3))
+
+# Step 3 - get keel line
+lbl_keel_caption = tk.Label(text="Keel data", master=frm_keel_parent)
+lbl_keel_caption.grid(row=0,column=0,sticky="ew",columnspan=3)
+
+# Define points
+bowRiseX= 0.98
+bowRiseY = 12*0.01
+keelX1 = np.nan
+keelY1 = np.nan
+keelX2 = np.nan
+keelY2 = np.nan
+lowPointFraction = 0.33
+bumpX = lowPointFraction
+bumpY = tc
+keelX3 = 0.32
+keelY3 = 0.231
+keelX4 = np.nan
+keelY4 = np.nan
+aftRiseX = 0.02
+aftRiseY = 10*0.01
+splineOrder = 2
+splineSF = 0
+
+
+# parametrize everything common
+colLabel = 0
+colX = 1
+colY = 2
+row=0
+xColWidth = 5
+yColWidth = 5
+# top line
+row=row+1
+lbl_keelX = tk.Label(text="x", master=frm_keel_parent)
+lbl_keelX.grid(row=row,column=colX)
+lbl_keelY = tk.Label(text="y", master=frm_keel_parent)
+lbl_keelY.grid(row=row,column=colY)
+# bow
+row=row+1
+lbl_keelBow = tk.Label(text="bow", master=frm_keel_parent)
+lbl_keelBow.grid(row=row,column=colLabel)
+
+lbl_keelBowX = tk.Label(text="1*Lwl",master=frm_keel_parent, width=xColWidth)
+lbl_keelBowX.grid(row=row,column=colX)
+
+lbl_keelBowY = tk.Label(text="0",master=frm_keel_parent, width=yColWidth)
+lbl_keelBowY.grid(row=row,column=colY)
+
+# bow rise
+row=row+1
+lbl_keelBowRise = tk.Label(text="bow rise", master=frm_keel_parent)
+lbl_keelBowRise.grid(row=row,column=colLabel)
+
+ent_keelBowRiseX = tk.Entry(master=frm_keel_parent, width=xColWidth)
+ent_keelBowRiseX.grid(row=row,column=colX)
+ent_keelBowRiseX.insert(0, float(bowRiseX))
+
+ent_keelBowRiseY = tk.Entry(master=frm_keel_parent, width=yColWidth)
+ent_keelBowRiseY.grid(row=row,column=colY)
+ent_keelBowRiseY.insert(0, float(bowRiseY*100))
+
+# keel1
+row=row+1
+lbl_keel1 = tk.Label(text="p1", master=frm_keel_parent)
+lbl_keel1.grid(row=row,column=colLabel)
+
+ent_keelX1 = tk.Entry(master=frm_keel_parent, width=xColWidth)
+ent_keelX1.grid(row=row,column=colX)
+ent_keelX1.insert(0, float(keelX1))
+
+ent_keelY1 = tk.Entry(master=frm_keel_parent, width=yColWidth)
+ent_keelY1.grid(row=row,column=colY)
+ent_keelY1.insert(0, float(keelY1*100))
+
+# keel2
+row=row+1
+lbl_keel2 = tk.Label(text="p2", master=frm_keel_parent)
+lbl_keel2.grid(row=row,column=colLabel)
+
+ent_keelX2 = tk.Entry(master=frm_keel_parent, width=xColWidth)
+ent_keelX2.grid(row=row,column=colX)
+ent_keelX2.insert(0, float(keelX2))
+
+ent_keelY2 = tk.Entry(master=frm_keel_parent, width=yColWidth)
+ent_keelY2.grid(row=row,column=colY)
+ent_keelY2.insert(0, float(keelY2*100))
+
+# bump
+row=row+1
+lbl_keelBump = tk.Label(text="bump", master=frm_keel_parent)
+lbl_keelBump.grid(row=row,column=colLabel)
+
+ent_keelBumpX = tk.Entry(master=frm_keel_parent, width=xColWidth)
+ent_keelBumpX.grid(row=row,column=colX)
+ent_keelBumpX.insert(0, float(bumpX))
+
+lbl_keelBumpY = tk.Label(text=round(100*bumpY,1),master=frm_keel_parent, width=yColWidth)
+lbl_keelBumpY.grid(row=row,column=colY)
+
+# keel3
+row=row+1
+lbl_keel3 = tk.Label(text="p3", master=frm_keel_parent)
+lbl_keel3.grid(row=row,column=colLabel)
+
+ent_keelX3 = tk.Entry(master=frm_keel_parent, width=xColWidth)
+ent_keelX3.grid(row=row,column=colX)
+ent_keelX3.insert(0, float(keelX3))
+
+ent_keelY3 = tk.Entry(master=frm_keel_parent, width=yColWidth)
+ent_keelY3.grid(row=row,column=colY)
+ent_keelY3.insert(0, float(keelY3*100))
+
+# keel4
+row=row+1
+lbl_keel4 = tk.Label(text="p4", master=frm_keel_parent)
+lbl_keel4.grid(row=row,column=colLabel)
+
+ent_keelX4 = tk.Entry(master=frm_keel_parent, width=xColWidth)
+ent_keelX4.grid(row=row,column=colX)
+ent_keelX4.insert(0, float(keelX4))
+
+ent_keelY4 = tk.Entry(master=frm_keel_parent, width=yColWidth)
+ent_keelY4.grid(row=row,column=colY)
+ent_keelY4.insert(0, float(keelY4*100))
+
+# aft rise
+row=row+1
+lbl_keelAftRise = tk.Label(text="aft rise", master=frm_keel_parent)
+lbl_keelAftRise.grid(row=row,column=colLabel)
+
+ent_keelAftRiseX = tk.Entry(master=frm_keel_parent, width=xColWidth)
+ent_keelAftRiseX.grid(row=row,column=colX)
+ent_keelAftRiseX.insert(0, float(aftRiseX))
+
+ent_keelAftRiseY = tk.Entry(master=frm_keel_parent, width=yColWidth)
+ent_keelAftRiseY.grid(row=row,column=colY)
+ent_keelAftRiseY.insert(0, float(aftRiseY*100))
+
+# bow
+row=row+1
+lbl_keelStern = tk.Label(text="stern", master=frm_keel_parent)
+lbl_keelStern.grid(row=row,column=colLabel)
+
+lbl_keelSternX = tk.Label(text="0",master=frm_keel_parent, width=xColWidth)
+lbl_keelSternX.grid(row=row,column=colX)
+
+lbl_keelSternY = tk.Label(text="0",master=frm_keel_parent, width=yColWidth)
+lbl_keelSternY.grid(row=row,column=colY)
+
+# spline order
+row=row+1
+lbl_keelSplineOrder = tk.Label(text="Spline order", master=frm_keel_parent)
+lbl_keelSplineOrder.grid(row=row,column=colLabel)
+
+ent_keelSplineOrder = tk.Entry(master=frm_keel_parent, width=xColWidth)
+ent_keelSplineOrder.grid(row=row,column=colX, columnspan=2)
+ent_keelSplineOrder.insert(0, float(splineOrder))
+
+# spline smooth factor
+row=row+1
+lbl_keelSplineOrder = tk.Label(text="Spline SF", master=frm_keel_parent)
+lbl_keelSplineOrder.grid(row=row,column=colLabel)
+
+ent_keelSplineOrder = tk.Entry(master=frm_keel_parent, width=xColWidth)
+ent_keelSplineOrder.grid(row=row,column=colX, columnspan=2)
+ent_keelSplineOrder.insert(0, float(splineSF))
+
+# Function for x,y vectors
+xDefVector, yDefVector = getKeelVectors(bowRiseX,bowRiseY,
+                                        keelX1,keelY1,
+                                        keelX2,keelY2,
+                                        bumpX,bumpY,
+                                        keelX3,keelY3,
+                                        keelX4,keelY4,
+                                        aftRiseX,aftRiseY,
+                                        lwl
+                                        )
+#print(xDefVector, yDefVector)
+
+# Create x,y splines
+keelXspline = interpolate.splrep(xDefVector[1:-1], yDefVector[1:-1], 
+                                 k=splineOrder,s=splineSF)
+
+# plotKeelLineOnCanvas(xDefVector, yDefVector, 
+#                        keelXspline, 
+#                        1.0*xDefVector[0], 
+#                        1.0*xDefVector[-1],
+#                        yToFind)
+                                       
+
+# Step 4 - get max width curve shape (combination of A and B)
+maxWidthPoints, maxAreaLength = maxWidthDefPoints(keelXspline,deltaY)
+print(maxWidthPoints)
+print(maxAreaLength)
+    # Dedicated function
+    # Solve both splines for given f(y)=x
+    # Defining values
+    # Distort A, B accordingly
+    # second derivative (curve, max/min/avg value)
+    # import/create and save (import/save functions)
+    # have both x, z step version (spline)
+    
+
+# Step 5 - define main horizontal cross sectional area curve (fast/slow drop, fast/slow bullet)
+lbl_plane_caption = tk.Label(text="Plane data", master=frm_plane_parent)
+lbl_plane_caption.grid(row=0,column=0,sticky="ew",columnspan=9)    
+
+# Define points
+
+# SHAPE 1
+shape1VectorX = np.array([1,np.nan,0.35,0.34,np.nan,np.nan,np.nan,0])
+shape1VectorY = np.array([0.005,np.nan,round(bwl/2,3),round(bwl/2,3),np.nan,np.nan,np.nan,0])
+
+# SHAPE 2
+shape2VectorX = np.array([1,np.nan,0.5,0.49,np.nan,np.nan,np.nan,0])
+shape2VectorY = np.array([0.005,np.nan,bwl/2,bwl/2,np.nan,np.nan,np.nan,0])
+
+# SHAPE 3
+shape3VectorX = np.array([1,np.nan,0.31,0.3,np.nan,np.nan,np.nan,0])
+shape3VectorY = np.array([0.005,np.nan,bwl/2,bwl/2,np.nan,np.nan,np.nan,0])
+
+# SHAPE 4
+shape4VectorX = np.array([1,np.nan,0.3,0.29,np.nan,np.nan,np.nan,0])
+shape4VectorY = np.array([0.005,np.nan,bwl/2,bwl/2,np.nan,np.nan,np.nan,round(0.2*bwl/2,3)])
+
+splineOrder = 2
+splineSF = 0
+
+
+# parametrize everything common
+colLabel = 0
+colX = 1
+colY = 2
+colX2 = 3
+colY2 = 4
+colX3 = 5
+colY3 = 6
+colX4 = 7
+colY4 = 8
+row = 0
+xColWidth = 4
+yColWidth = 4
+# top line
+row = row + 1
+lbl_keelX = tk.Label(text="x", master=frm_plane_parent)
+lbl_keelX.grid(row=row,column=colX)
+lbl_keelY = tk.Label(text="y", master=frm_plane_parent)
+lbl_keelY.grid(row=row,column=colY)
+lbl_keelX = tk.Label(text="x", master=frm_plane_parent)
+lbl_keelX.grid(row=row,column=colX2)
+lbl_keelY = tk.Label(text="y", master=frm_plane_parent)
+lbl_keelY.grid(row=row,column=colY2)
+lbl_keelX = tk.Label(text="x", master=frm_plane_parent)
+lbl_keelX.grid(row=row,column=colX3)
+lbl_keelY = tk.Label(text="y", master=frm_plane_parent)
+lbl_keelY.grid(row=row,column=colY3)
+lbl_keelX = tk.Label(text="x", master=frm_plane_parent)
+lbl_keelX.grid(row=row,column=colX4)
+lbl_keelY = tk.Label(text="y", master=frm_plane_parent)
+lbl_keelY.grid(row=row,column=colY4)
+
+
+# plane row 1
+n = 0
+row = row + 1
+lbl_plane1 = tk.Label(text="p1", master=frm_plane_parent)
+lbl_plane1.grid(row=row,column=colLabel)
+
+ent_plane1X1 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane1X1.grid(row=row,column=colX)
+ent_plane1X1.insert(0, round(shape1VectorX[n],1))
+
+ent_plane1Y1 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane1Y1.grid(row=row,column=colY)
+ent_plane1Y1.insert(0, round(shape1VectorY[n]*100))
+
+ent_plane2X1 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane2X1.grid(row=row,column=colX2)
+ent_plane2X1.insert(0, round(shape2VectorX[n],1))
+
+ent_plane2Y1 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane2Y1.grid(row=row,column=colY2)
+ent_plane2Y1.insert(0, round(shape2VectorY[n]*100,1))
+
+ent_plane3X1 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane3X1.grid(row=row,column=colX3)
+ent_plane3X1.insert(0, round(shape3VectorX[n],1))
+
+ent_plane3Y1 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane3Y1.grid(row=row,column=colY3)
+ent_plane3Y1.insert(0, round(shape3VectorY[n]*100,1))
+
+ent_plane4X1 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane4X1.grid(row=row,column=colX4)
+ent_plane4X1.insert(0, round(shape4VectorX[n],1))
+
+ent_plane4Y1 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane4Y1.grid(row=row,column=colY4)
+ent_plane4Y1.insert(0, round(shape4VectorY[n]*100,1))
+
+# plane row 2
+n = n + 1
+row = row + 1
+lbl_plane2 = tk.Label(text="p2", master=frm_plane_parent)
+lbl_plane2.grid(row=row,column=colLabel)
+
+ent_plane1X2 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane1X2.grid(row=row,column=colX)
+ent_plane1X2.insert(0, round(shape1VectorX[n],1))
+
+ent_plane1Y2 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane1Y2.grid(row=row,column=colY)
+ent_plane1Y2.insert(0, round(shape1VectorY[n]*100,1))
+
+ent_plane2X2 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane2X2.grid(row=row,column=colX2)
+ent_plane2X2.insert(0, round(shape2VectorX[n],1))
+
+ent_plane2Y2 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane2Y2.grid(row=row,column=colY2)
+ent_plane2Y2.insert(0, round(shape2VectorY[n]*100,1))
+
+ent_plane3X2 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane3X2.grid(row=row,column=colX3)
+ent_plane3X2.insert(0, round(shape3VectorX[n],1))
+
+ent_plane3Y2 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane3Y2.grid(row=row,column=colY3)
+ent_plane3Y2.insert(0, round(shape3VectorY[n]*100,1))
+
+ent_plane4X2 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane4X2.grid(row=row,column=colX4)
+ent_plane4X2.insert(0, round(shape4VectorX[n],1))
+
+ent_plane4Y2 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane4Y2.grid(row=row,column=colY4)
+ent_plane4Y2.insert(0, round(shape4VectorY[n]*100,1))
+
+# plane row 3
+n = n + 1
+row = row + 1
+lbl_plane3 = tk.Label(text="p3", master=frm_plane_parent)
+lbl_plane3.grid(row=row,column=colLabel)
+
+ent_plane1X3 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane1X3.grid(row=row,column=colX)
+ent_plane1X3.insert(0, round(shape1VectorX[n],1))
+
+ent_plane1Y3 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane1Y3.grid(row=row,column=colY)
+ent_plane1Y3.insert(0, round(shape1VectorY[n]*100,1))
+
+ent_plane2X3 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane2X3.grid(row=row,column=colX2)
+ent_plane2X3.insert(0, round(shape2VectorX[n],1))
+
+ent_plane2Y3 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane2Y3.grid(row=row,column=colY2)
+ent_plane2Y3.insert(0, round(shape2VectorY[n]*100,1))
+
+ent_plane3X3 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane3X3.grid(row=row,column=colX3)
+ent_plane3X3.insert(0, round(shape3VectorX[n],1))
+
+ent_plane3Y3 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane3Y3.grid(row=row,column=colY3)
+ent_plane3Y3.insert(0, round(shape3VectorY[n]*100,1))
+
+ent_plane4X3 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane4X3.grid(row=row,column=colX4)
+ent_plane4X3.insert(0, round(shape4VectorX[n],1))
+
+ent_plane4Y3 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane4Y3.grid(row=row,column=colY4)
+ent_plane4Y3.insert(0, round(shape4VectorY[n]*100,1))
+
+# plane row 4
+n = n + 1
+row = row + 1
+lbl_plane4 = tk.Label(text="p4", master=frm_plane_parent)
+lbl_plane4.grid(row=row,column=colLabel)
+
+ent_plane1X4 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane1X4.grid(row=row,column=colX)
+ent_plane1X4.insert(0, round(shape1VectorX[n],1))
+
+ent_plane1Y4 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane1Y4.grid(row=row,column=colY)
+ent_plane1Y4.insert(0, round(shape1VectorY[n]*100,1))
+
+ent_plane2X4 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane2X4.grid(row=row,column=colX2)
+ent_plane2X4.insert(0, round(shape2VectorX[n],1))
+
+ent_plane2Y4 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane2Y4.grid(row=row,column=colY2)
+ent_plane2Y4.insert(0, round(shape2VectorY[n]*100,1))
+
+ent_plane3X4 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane3X4.grid(row=row,column=colX3)
+ent_plane3X4.insert(0, round(shape3VectorX[n],1))
+
+ent_plane3Y4 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane3Y4.grid(row=row,column=colY3)
+ent_plane3Y4.insert(0, round(shape3VectorY[n]*100,1))
+
+ent_plane4X4 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane4X4.grid(row=row,column=colX4)
+ent_plane4X4.insert(0, round(shape4VectorX[n],1))
+
+ent_plane4Y4 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane4Y4.grid(row=row,column=colY4)
+ent_plane4Y4.insert(0, round(shape4VectorY[n]*100,1))
+
+# plane row 5
+n = n + 1
+row = row + 1
+lbl_plane5 = tk.Label(text="p5", master=frm_plane_parent)
+lbl_plane5.grid(row=row,column=colLabel)
+
+ent_plane1X5 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane1X5.grid(row=row,column=colX)
+ent_plane1X5.insert(0, round(shape1VectorX[n],1))
+
+ent_plane1Y5 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane1Y5.grid(row=row,column=colY)
+ent_plane1Y5.insert(0, round(shape1VectorY[n]*100,1))
+
+ent_plane2X5 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane2X5.grid(row=row,column=colX2)
+ent_plane2X5.insert(0, round(shape2VectorX[n],1))
+
+ent_plane2Y5 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane2Y5.grid(row=row,column=colY2)
+ent_plane2Y5.insert(0, round(shape2VectorY[n]*100,1))
+
+ent_plane3X5 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane3X5.grid(row=row,column=colX3)
+ent_plane3X5.insert(0, round(shape3VectorX[n],1))
+
+ent_plane3Y5 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane3Y5.grid(row=row,column=colY3)
+ent_plane3Y5.insert(0, round(shape3VectorY[n]*100,1))
+
+ent_plane4X5 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane4X5.grid(row=row,column=colX4)
+ent_plane4X5.insert(0, round(shape4VectorX[n],1))
+
+ent_plane4Y5 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane4Y5.grid(row=row,column=colY4)
+ent_plane4Y5.insert(0, round(shape4VectorY[n]*100,1))
+
+# plane row 6
+n = n + 1
+row = row + 1
+lbl_plane6 = tk.Label(text="p6", master=frm_plane_parent)
+lbl_plane6.grid(row=row,column=colLabel)
+
+ent_plane1X6 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane1X6.grid(row=row,column=colX)
+ent_plane1X6.insert(0, round(shape1VectorX[n],1))
+
+ent_plane1Y6 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane1Y6.grid(row=row,column=colY)
+ent_plane1Y6.insert(0, round(shape1VectorY[n]*100,1))
+
+ent_plane2X6 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane2X6.grid(row=row,column=colX2)
+ent_plane2X6.insert(0, round(shape2VectorX[n],1))
+
+ent_plane2Y6 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane2Y6.grid(row=row,column=colY2)
+ent_plane2Y6.insert(0, round(shape2VectorY[n]*100,1))
+
+ent_plane3X6 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane3X6.grid(row=row,column=colX3)
+ent_plane3X6.insert(0, round(shape3VectorX[n],1))
+
+ent_plane3Y6 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane3Y6.grid(row=row,column=colY3)
+ent_plane3Y6.insert(0, round(shape3VectorY[n]*100,1))
+
+ent_plane4X6 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane4X6.grid(row=row,column=colX4)
+ent_plane4X6.insert(0, round(shape4VectorX[n],1))
+
+ent_plane4Y6 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane4Y6.grid(row=row,column=colY4)
+ent_plane4Y6.insert(0, round(shape4VectorY[n]*100,1))
+
+# plane row 7
+n = n + 1
+row = row + 1
+lbl_plane7 = tk.Label(text="p7", master=frm_plane_parent)
+lbl_plane7.grid(row=row,column=colLabel)
+
+ent_plane1X7 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane1X7.grid(row=row,column=colX)
+ent_plane1X7.insert(0, round(shape1VectorX[n],1))
+
+ent_plane1Y7 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane1Y7.grid(row=row,column=colY)
+ent_plane1Y7.insert(0, round(shape1VectorY[n]*100,1))
+
+ent_plane2X7 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane2X7.grid(row=row,column=colX2)
+ent_plane2X7.insert(0, round(shape2VectorX[n],1))
+
+ent_plane2Y7 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane2Y7.grid(row=row,column=colY2)
+ent_plane2Y7.insert(0, round(shape2VectorY[n]*100,1))
+
+ent_plane3X7 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane3X7.grid(row=row,column=colX3)
+ent_plane3X7.insert(0, round(shape3VectorX[n],1))
+
+ent_plane3Y7 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane3Y7.grid(row=row,column=colY3)
+ent_plane3Y7.insert(0, round(shape3VectorY[n]*100,1))
+
+ent_plane4X7 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane4X7.grid(row=row,column=colX4)
+ent_plane4X7.insert(0, round(shape4VectorX[n],1))
+
+ent_plane4Y7 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane4Y7.grid(row=row,column=colY4)
+ent_plane4Y7.insert(0, round(shape4VectorY[n]*100,1))
+
+# plane row 8
+n = n + 1
+row = row + 1
+lbl_plane8 = tk.Label(text="p8", master=frm_plane_parent)
+lbl_plane8.grid(row=row,column=colLabel)
+
+ent_plane1X8 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane1X8.grid(row=row,column=colX)
+ent_plane1X8.insert(0, round(shape1VectorX[n],1))
+
+ent_plane1Y8 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane1Y8.grid(row=row,column=colY)
+ent_plane1Y8.insert(0, round(shape1VectorY[n]*100,1))
+
+ent_plane2X8 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane2X8.grid(row=row,column=colX2)
+ent_plane2X8.insert(0, round(shape2VectorX[n],1))
+
+ent_plane2Y8 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane2Y8.grid(row=row,column=colY2)
+ent_plane2Y8.insert(0, round(shape2VectorY[n]*100,1))
+
+ent_plane3X8 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane3X8.grid(row=row,column=colX3)
+ent_plane3X8.insert(0, round(shape3VectorX[n],1))
+
+ent_plane3Y8 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane3Y8.grid(row=row,column=colY3)
+ent_plane3Y8.insert(0, round(shape3VectorY[n]*100,1))
+
+ent_plane4X8 = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_plane4X8.grid(row=row,column=colX4)
+ent_plane4X8.insert(0, round(shape4VectorX[n],1))
+
+ent_plane4Y8 = tk.Entry(master=frm_plane_parent, width=yColWidth)
+ent_plane4Y8.grid(row=row,column=colY4)
+ent_plane4Y8.insert(0, round(shape4VectorY[n]*100,1))
+
+# spline order
+row=row+1
+lbl_keelSplineOrder = tk.Label(text="Spline order", master=frm_plane_parent)
+lbl_keelSplineOrder.grid(row=row,column=colLabel)
+
+ent_keelSplineOrder = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_keelSplineOrder.grid(row=row,column=colX, columnspan=2)
+ent_keelSplineOrder.insert(0, float(splineOrder))
+
+# spline smooth factor
+row=row+1
+lbl_keelSplineOrder = tk.Label(text="Spline SF", master=frm_plane_parent)
+lbl_keelSplineOrder.grid(row=row,column=colLabel)
+
+ent_keelSplineOrder = tk.Entry(master=frm_plane_parent, width=xColWidth)
+ent_keelSplineOrder.grid(row=row,column=colX, columnspan=2)
+ent_keelSplineOrder.insert(0, float(splineSF))
+
+# Function for x,y vectors
+shape1VectorX, shape1VectorY = getPlaneVectors(shape1VectorX,shape1VectorY,lwl)
+shape2VectorX, shape2VectorY = getPlaneVectors(shape2VectorX,shape2VectorY,lwl)
+shape3VectorX, shape3VectorY = getPlaneVectors(shape3VectorX,shape3VectorY,lwl)
+shape4VectorX, shape4VectorY = getPlaneVectors(shape4VectorX,shape4VectorY,lwl)                                     
+
+# Create x,y splines
+shape1Xspline = interpolate.splrep(shape1VectorX, shape1VectorY, 
+                                       k=splineOrder,s=splineSF)
+shape2Xspline = interpolate.splrep(shape2VectorX, shape2VectorY, 
+                                       k=splineOrder,s=splineSF)
+shape3Xspline = interpolate.splrep(shape3VectorX, shape3VectorY, 
+                                       k=splineOrder,s=splineSF)
+shape4Xspline = interpolate.splrep(shape4VectorX, shape4VectorY, 
+                                       k=splineOrder,s=splineSF)
+
+# Plot on canvas function
+# plotPlaneShapeOnCanvas(shape1VectorX, shape1VectorY,
+#                        shape2VectorX, shape2VectorY,
+#                        shape3VectorX, shape3VectorY,
+#                        shape4VectorX, shape4VectorY, 
+#                        shape1Xspline, shape2Xspline, shape3Xspline, shape4Xspline)
+
+plotKeelAndPlane(shape1VectorX, shape1VectorY,
+                 shape2VectorX, shape2VectorY,
+                 shape3VectorX, shape3VectorY,
+                 shape4VectorX, shape4VectorY, 
+                 xDefVector, yDefVector,
+                 shape1Xspline, shape2Xspline, shape3Xspline, shape4Xspline,keelXspline,
+                 maxWidthPoints)
+
+# Connect keel and plane plots
+# Complete step 4
+# Make analytical data single column
+# Enlarge keel and plane plot
+# Define preliminary plane shapes
+# Add scrolling into windows form
+# Add open in fullscreen
+# Add plot legend
+# Correct plot colors
+# Go on making hull data
+
+    # Defining values
+    # Dedicated function
+    # Bullet area curve as a function fy(x,z)
+    # second derivative (curve, max/min/avg value)
+    # import/create and save (import/save functions)
+    # have both x, y step version (spline) 
+
+# Step 6 - create hullData level by level
+getPlaneSplinePartOne(tc-0.01,keelXspline,midsectionXspline,maxWidthXspline)
+    # calculate horizontal cross sectional areas
+    # calculate vertical volume distribution
+    # calculate vertical CoL position (as a function of draft)
+    # import/create and save (import/save functions)
+
+# Step 7 - recreate hullData station by station
+    # calculate station cross sectional areas
+    # calculate longitudinal volume distribution (as a function of draft)
+    # calculate longitudinal CoL position (as a function of draft)
+    # import/create and save (import/save functions)
+
+# Step 8 - analyze hull data
+    # calculate submerged volume distribution (as a function of draft)
+    # calculate vertical prism volume distribution (as a function of draft)
+    # calculate prismatic coefficient distribution (as a function of draft)
+    # calculate longitudinal cross sectional area distribution (as a function of draft)
+    # calculate submerged area (as a function of draft)
+
+# Step 9 - trim variation
+
+# Step 10 - roll variation
+end = time.time()
+print("Total run time",round((end - start),1),"s")
+window.mainloop()
