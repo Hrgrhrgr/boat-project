@@ -146,6 +146,11 @@ ldr = lwl*np.cbrt(1025/mldc)
 mllc = 0.7*mldc
 mmoc = 0.8*mldc
 
+keelConnectionWidth = 0.01
+frndaTopXpercent = 0.4
+frndaTopYpercent = 0.8
+frndaMaxHeight = 0.07
+
 #1 waterline length
 row = 0
 lbl_lwl = tk.Label(text="Waterline length", master=frm_head_l)
@@ -507,6 +512,12 @@ def plotKeelAndPlane(shape1VectorX, shape1VectorY,
     ynew5 = np.insert(ynew5,0,0)
     ynew5 = np.append(ynew5,0)
     keelVectorY = -np.array(keelVectorY)
+    
+    xMaxWidth = np.linspace(maxWidthPoints[0,0],maxWidthPoints[0,1],20)
+    yMaxWidth = -interpolate.splev(xMaxWidth,getMaxWidthPositionSpline())
+    
+    xFrnda = np.linspace(0,maxWidthPoints[0,0],30)
+    yFrnda = interpolate.splev(xFrnda,getFrnda(frndaTopXpercent, frndaTopYpercent, frndaMaxHeight))
 
     fig = plt.figure(figsize=[10,4.8])
     plt.plot(shape1VectorX, shape1VectorY, 'x', 
@@ -517,12 +528,14 @@ def plotKeelAndPlane(shape1VectorX, shape1VectorY,
              xnew, ynew3,
              shape4VectorX, shape4VectorY, 'x', 
              xnew, ynew4,
+             xFrnda, yFrnda, '-',
              keelVectorX, keelVectorY, 'x', 
              xnew2, ynew5,
              [shape1VectorX[0]-0.2,shape1VectorX[-1]+0.2],[0,0],'--',
              maxWidthPoints[0,0:],-maxWidthPoints[1,0:],':',
              [maxWidthPoints[0,0],maxWidthPoints[0,0]],[bwl/2,-tc],':',
-             [maxWidthPoints[0,1],maxWidthPoints[0,1]],[bwl/2,-tc],':'
+             [maxWidthPoints[0,1],maxWidthPoints[0,1]],[bwl/2,-tc],':',
+             xMaxWidth, yMaxWidth,':'
              )
     #plt.legend(['Def points', 'Spline','yToFind','Waterline'])
     plt.title('Plane and keel shape')
@@ -600,8 +613,8 @@ def maxWidthPositionForY(y,array):
     k = dy/dx
     c = (dx/dy)*(y1/x1)
     c = - dy/dx * x1
-    print('k ', k)
-    print('c ', c)
+    #print('k ', k)
+    #print('c ', c)
     x = y * dx/dy - ((dx/dy)**2) * y1/x1
     x = y/k - c/k
     return(x)
@@ -616,6 +629,38 @@ def maxWidthPositionForX(x,array):
     y = x * dy/dx + dx/dy * y1/x1
     return(y)
 
+def getMaxWidthPositionSpline():
+    xnew = np.linspace(maxWidthPoints[0,0],bumpX*lwl,10)
+    ynew = np.array([])
+    xreduced = np.array([])
+    yreduced = np.array([])
+    for x in xnew:
+
+        xreduced = np.append(xreduced, (x - maxWidthPoints[0,0])/maxAreaLength)
+        y = np.round_(interpolate.splev(x,keelXspline),4)
+        # print('y ', y, '| tc-dY ',(tc-deltaY/yMorphCorr), '| dY ', (deltaY/yMorphCorr), '| y-tc+dy', y-(tc-deltaY/yMorphCorr))
+        yreduced = np.append(yreduced, (y-(tc-deltaY/yMorphCorr))/(deltaY/yMorphCorr))
+        
+    xnew = yreduced*maxAreaLength+maxWidthPoints[0,0]
+    ynew = xreduced*tc
+    # print('xreduced ', xreduced)
+    # print('yreduced ', yreduced)
+    # print('xnew ', xnew)
+    # print('ynew ', ynew)
+    maxWidthPositionSpline = interpolate.splrep(xnew, ynew)
+
+    return(maxWidthPositionSpline)
+
+def getFrnda(x2, y2, ymax):
+    x1 = 0
+    x3 = maxWidthPoints[0,0] # frnda length
+    x2 = x2 * x3 # frnda top position
+    y1 = keelConnectionWidth
+    y2 = y2 * ymax # frnda height
+    y3 = 0
+    frndaSpline = interpolate.splrep([x1, x2, x3],[y1, y2, y3], k=2)
+    return(frndaSpline)
+
 def getPlaneSplinePartOne(y,keelSpline,midstationSpline,maxWidthSpline):
     x1 = solveSplineForY(keelSpline, y, 0, lwl)[0]
     x2 = maxWidthPositionForY(y, maxWidthPoints)
@@ -628,8 +673,8 @@ def getPlaneSplinePartOne(y,keelSpline,midstationSpline,maxWidthSpline):
     y4 = 0.005
     splineOrder = 2
     splineSF = 0
-    print([x1,x2,x3,x4])
-    print([y1,y2,y3,y4])
+    #print([x1,x2,x3,x4])
+    #print([y1,y2,y3,y4])
     x3 = x2 + 0.001
     y3 = y2
     spline = interpolate.splrep([x1,x2,x3,x4], [y1,y2,y3,y4],
@@ -932,19 +977,19 @@ bowRiseX= 0.98
 bowRiseY = 12*0.01
 keelX1 = np.nan
 keelY1 = np.nan
-keelX2 = np.nan
-keelY2 = np.nan
+keelX2 = 0.335
+keelY2 = tc
 lowPointFraction = 0.33
 bumpX = lowPointFraction
 bumpY = tc
-keelX3 = 0.32
-keelY3 = 0.231
+keelX3 = np.nan
+keelY3 = np.nan
 keelX4 = np.nan
 keelY4 = np.nan
 aftRiseX = 0.02
 aftRiseY = 10*0.01
 splineOrder = 2
-splineSF = 0
+splineSF = 0.0
 
 
 # parametrize everything common
@@ -1115,8 +1160,8 @@ keelXspline = interpolate.splrep(xDefVector[1:-1], yDefVector[1:-1],
 
 # Step 4 - get max width curve shape (combination of A and B)
 maxWidthPoints, maxAreaLength = maxWidthDefPoints(keelXspline,deltaY)
-print(maxWidthPoints)
-print(maxAreaLength)
+print('maxWidthPoints', maxWidthPoints)
+print('maxAreaLength', maxAreaLength)
     # Dedicated function
     # Solve both splines for given f(y)=x
     # Defining values
@@ -1558,6 +1603,7 @@ plotKeelAndPlane(shape1VectorX, shape1VectorY,
 
 # Step 6 - create hullData level by level
 getPlaneSplinePartOne(tc-0.01,keelXspline,midsectionXspline,maxWidthXspline)
+getPlaneSplinePartOne(tc-0.005,keelXspline,midsectionXspline,maxWidthXspline)
     # calculate horizontal cross sectional areas
     # calculate vertical volume distribution
     # calculate vertical CoL position (as a function of draft)
