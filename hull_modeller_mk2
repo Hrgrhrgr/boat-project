@@ -79,11 +79,11 @@ window = tk.Frame(my_canvas)
 my_canvas.create_window((0,0), window=window, anchor="nw")
 
 
-#Label	lbl	lbl_name
-#Button	btn	btn_submit
-#Entry	ent	ent_age
-#Text	txt	txt_notes
-#Frame	frm	frm_address
+#Label	lbl
+#Button	btn
+#Entry	ent
+#Text	txt
+#Frame	frm
 
 
 # MAIN FRAME DEFINITON
@@ -362,6 +362,21 @@ button4.grid(row=2,column=0,columnspan=3,sticky="ew",padx=5,pady=5)
 ### Declaration of global variables
 
 ### Declaration of functions
+
+def createMainFrames():
+    return()
+
+def createAnalyticalDataGrid():
+    return()
+
+def createMidstationDataGrid():
+    return()
+
+def createKeelDataGrid():
+    return()
+
+def createPlaneDataGrid():
+    return()
 
 def getMidstationVectors(x1,x2,x3,xwl,x4,x5,x6,xbot,
                          y1,y2,y3,ywl,y4,y5,y6,ybot):
@@ -994,7 +1009,7 @@ lbl_keel_caption.grid(row=0,column=0,sticky="ew",columnspan=3)
 
 # Define points
 bowRiseX= 0.98
-bowRiseY = 12*0.01
+bowRiseY = 0.07
 keelX1 = np.nan
 keelY1 = np.nan
 keelX2 = 0.335
@@ -1006,8 +1021,8 @@ keelX3 = np.nan
 keelY3 = np.nan
 keelX4 = np.nan
 keelY4 = np.nan
-aftRiseX = 0.02
-aftRiseY = 10*0.01
+aftRiseX = 0.01
+aftRiseY = 0.09
 splineOrder = 2
 splineSF = 0.0
 
